@@ -126,6 +126,7 @@ namespace DQ_robotics
             const int PROBLEM_SIZE = H.rows();
             const int INEQUALITY_CONSTRAINT_SIZE = b.size();
             const int EQUALITY_CONSTRAINT_SIZE = beq.size();
+            const int TOTAL_CONSTRAINTS = INEQUALITY_CONSTRAINT_SIZE + EQUALITY_CONSTRAINT_SIZE;
 
             ///Check sizes
             //Objective function
@@ -142,10 +143,20 @@ namespace DQ_robotics
             if(beq.size()!=Aeq.rows())
                 throw std::runtime_error("DQ_QPOASESSolver::solve_quadratic_program(): size of beq="+std::to_string(beq.size())+" should be compatible with rows of Aeq="+std::to_string(Aeq.rows())+".");
 
-            //Append equality constraints to inequality constraints
-            auto A_extended = A;
-            auto ub_extended = b;
-            if(EQUALITY_CONSTRAINT_SIZE!=0 && INEQUALITY_CONSTRAINT_SIZE!=0)
+
+            MatrixXd A_extended;
+            VectorXd ub_extended;
+
+            if(TOTAL_CONSTRAINTS == 0)
+            {
+                // Create dummy constraints (1x1 matrix) that are always satisfied
+                // This is a workaround for qpOASES requiring at least one constraint
+                A_extended.resize(1, PROBLEM_SIZE);
+                A_extended.setZero();
+                ub_extended.resize(1);
+                ub_extended.setConstant(1e10);  // Large upper bound
+            }
+            else if(EQUALITY_CONSTRAINT_SIZE!=0 && INEQUALITY_CONSTRAINT_SIZE!=0)
             {
                 A_extended.resize(INEQUALITY_CONSTRAINT_SIZE + EQUALITY_CONSTRAINT_SIZE*2, PROBLEM_SIZE);
                 A_extended << A, Aeq, -Aeq;
@@ -203,3 +214,4 @@ namespace DQ_robotics
     };
 
 }
+
