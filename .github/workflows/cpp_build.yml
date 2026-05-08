@@ -4,10 +4,11 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-${{ matrix.ubuntu_version}}
     strategy:
       fail-fast: false
       matrix:
+        ubuntu_version: ['22.04', '24.04', '26.04']
         testbranches: ['master']
 
     steps:
