@@ -1,5 +1,5 @@
 /**
-(C) Copyright 2022-2023 DQ Robotics Developers
+(C) Copyright 2011-2026 DQ Robotics Developers
 
 This file is part of DQ Robotics.
 
@@ -21,6 +21,8 @@ Contributors:
     - Responsible for the original implementation.
 - Quentin Lin (qlin1806@g.ecc.u-tokyo.ac.jp)
     - Added support for equality constraints
+- Juan Jose Quiroz Omana (juanjose.quirozomana@manchester.ac.uk)    
+    - Fixed the bug https://github.com/dqrobotics/cpp-interface-qpoases/issues/3
 */
 #pragma once
 
@@ -34,7 +36,7 @@ using namespace Eigen;
 #include <qpOASES.hpp>
 USING_NAMESPACE_QPOASES
 
-namespace DQ_robotics
+    namespace DQ_robotics
 {
     class DQ_QPOASESSolver: public DQ_QuadraticProgrammingSolver
     {
@@ -46,7 +48,7 @@ namespace DQ_robotics
         //Page 14 of https://www.coin-or.org/qpOASES/doc/3.0/manual.pdf
         int_t maximum_working_set_recalculations_;
 
-        // Equality constraints are handled by means of appended inequality constraints within an equality tolerance threshold.  
+        // Equality constraints are handled by means of appended inequality constraints within an equality tolerance threshold.
         // Initialized to DQ_threshold by default
         double_t equality_constraints_tolerance_ = DQ_threshold;
 
@@ -78,7 +80,7 @@ namespace DQ_robotics
 
     public:
         DQ_QPOASESSolver():
-        qpoases_solve_first_time_(true)
+            qpoases_solve_first_time_(true)
         {
         }
         ~DQ_QPOASESSolver()=default;
@@ -143,36 +145,45 @@ namespace DQ_robotics
                 throw std::runtime_error("DQ_QPOASESSolver::solve_quadratic_program(): size of beq="+std::to_string(beq.size())+" should be compatible with rows of Aeq="+std::to_string(Aeq.rows())+".");
 
             //Append equality constraints to inequality constraints
-            auto A_extended = A;
-            auto ub_extended = b;
+            MatrixXd A_extended = A;
+            VectorXd ub_extended = b;
             if(EQUALITY_CONSTRAINT_SIZE!=0 && INEQUALITY_CONSTRAINT_SIZE!=0)
             {
                 A_extended.resize(INEQUALITY_CONSTRAINT_SIZE + EQUALITY_CONSTRAINT_SIZE*2, PROBLEM_SIZE);
                 A_extended << A, Aeq, -Aeq;
                 ub_extended.resize(INEQUALITY_CONSTRAINT_SIZE + EQUALITY_CONSTRAINT_SIZE*2);
                 ub_extended << b, beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_),
-                               -beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_);
+                    -beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_);
             } else if(EQUALITY_CONSTRAINT_SIZE!=0)
             {
                 A_extended.resize(EQUALITY_CONSTRAINT_SIZE*2, PROBLEM_SIZE);
                 A_extended << Aeq, -Aeq;
                 ub_extended.resize(EQUALITY_CONSTRAINT_SIZE*2);
                 ub_extended << beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_),
-                               -beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_);
+                    -beq + VectorXd::Constant(EQUALITY_CONSTRAINT_SIZE, equality_constraints_tolerance_);
             }
 
             std::vector<double> H_std_vec(H.data(), H.data() + H.rows() * H.cols());
             real_t* H_vec = &H_std_vec[0];
 
-            MatrixXd AT = A_extended.transpose();
-            std::vector<double> A_std_vec(AT.data(), AT.data() + AT.rows() * AT.cols());
-            real_t* A_vec = &A_std_vec[0];
-
             auto g_std_vec = _vectorxd_to_std_vector_double(f);
             real_t* g_vec = &g_std_vec[0];
 
-            auto ub_std_vec = _vectorxd_to_std_vector_double(ub_extended);
-            real_t *ubA_vec = &ub_std_vec[0];
+            real_t* A_vec = nullptr;   // Default for unconstrained cases
+            real_t* ubA_vec = nullptr; // Default for unconstrained cases
+
+            std::vector<double> A_std_vec;
+            std::vector<double> ub_std_vec;
+            if (EQUALITY_CONSTRAINT_SIZE + INEQUALITY_CONSTRAINT_SIZE > 0)
+            {
+                // For constrained cases, we update A_vec and ubA_vec accordingly
+                MatrixXd AT = A_extended.transpose();
+                A_std_vec = std::vector<double>(AT.data(), AT.data() + AT.rows() * AT.cols());
+                A_vec = &A_std_vec[0];
+
+                ub_std_vec = _vectorxd_to_std_vector_double(ub_extended);
+                ubA_vec = &ub_std_vec[0];
+            }
 
             if(qpoases_solve_first_time_)
             {
